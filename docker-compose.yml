@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  app:
+    image: dijer/netology-diploma
+    ports:
+      - 3000:3000
+    environment:
+      PORT: 3000
+      MONGO_URL: MONGO_URL_HERE
+
+  
