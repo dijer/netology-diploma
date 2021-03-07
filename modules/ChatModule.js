@@ -7,11 +7,8 @@ class ChatModule {
     }
 
     async find(users) {
-        const chat = await Chat.findOne({ users });
-        if (chat) {
-            return chat;
-        }
-        return null;
+        const chat = await Chat.findOne(users);
+        return chat;
     }
 
     async sendMessage(data) {
@@ -32,7 +29,6 @@ class ChatModule {
         chat.messages.push(message);
         chat.save();
         this.emitter.emit('newMessage', chat._id, message);
-        return message;
     }
 
     subscribe(callback) {

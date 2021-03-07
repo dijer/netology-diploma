@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-const expressSession = require('express-session');
+const sessionMiddleware = require('./middlewares/sessionMiddleware');
 const http = require('http');
 const socketIO = require('socket.io');
 const { User, Chat } = require('./models');
@@ -16,12 +16,13 @@ const usersApiRouter = require('./routes/api/users');
 
 const app = express();
 const server = http.Server(app);
-const io = socketIO(server);
+const io = socketIO(server, { cookie: false });
 
 const options = {
     usernameField: 'email',
     passwordField: 'passwordHash',
     passReqToCallback: false,
+    session: true,
 };
 
 /**
@@ -60,11 +61,7 @@ passport.deserializeUser(function(id, done) {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
 
-app.use(expressSession({
-    secret: 'qowiheoiqwheqwoheqw',
-    resave: false,
-    saveUninitialized: false,
-}));
+app.use(sessionMiddleware);
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -87,35 +84,48 @@ async function start() {
     }
 }
 
-io.on('connection', socket => {
-    const { id } = socket;
-    const { _id: userId } = socket.request.user;
-    var sessionId    = socket.handshake.sessionId;      
+io
+    .use(function(socket, next) {
+        sessionMiddleware(socket.request, {}, next);
+    })
+    .on('connection', socket => {
+        const { id } = socket;
+        console.log(`Socket connected: ${id}`);
 
-    ChatModule.subscribe(console.log);
+        const userId = socket.handshake.query.userId;
+        if (userId) {
 
-    socket.on('getHistory', async (revieverId) => {
-        const chat = await ChatModule.find({ users: [userId, recieverId] });
-        let messages = [];
-        if (chat) {
-            const { id } = chat;
-            messages = await ChatModule.getHistory(id);
+            ChatModule.subscribe(async (chatId, message) => {
+                const userChatId = await ChatModule.find({
+                    users: [userId, message.author]
+                })
+                if (userChatId && chatId === userChatId) {
+                    socket.emit('newMessage', message);
+                }
+            });
+
+            socket.on('getHistory', async (revieverId) => {
+                const chat = await ChatModule.find({ users: [userId, recieverId] });
+                let messages = [];
+                if (chat) {
+                    const { id } = chat;
+                    messages = await ChatModule.getHistory(id);
+                }
+                socket.emit('chatHistory', messages);
+            });
+
+            socket.on('sendMessage', async (reciever, text) => {
+                await ChatModule.sendMessage({
+                    author: userId,
+                    reciever,
+                    text,
+                });
+            });
         }
-        socket.emit('chatHistory', messages);
-    });
 
-    socket.on('sendMessage', async (receiver, text) => {
-        const message = await ChatModule.sendMessage({
-            author: userId,
-            reciever,
-            text,
+        socket.on('disconnect', () => {
+            console.log(`Socket disconnected: ${id}`);
         });
-        socket.emit('newMessage', message);
     });
-
-    socket.on('disconnect', () => {
-        console.log(`Socket disconnected: ${id}`);
-    });
-});
 
 start();

@@ -30,12 +30,12 @@ class AdvertisementModule {
     }
 
     async create(data) {
-        const advertisement = Advertisement.create(data);
+        const advertisement = await Advertisement.create(data);
         return advertisement;
     }
 
     async remove(id) {
-        const advertisement = Advertisement.findByIdAndUpdate(id, {
+        const advertisement = await Advertisement.findByIdAndUpdate(id, {
             isDeleted: true,
         });
         return advertisement;
