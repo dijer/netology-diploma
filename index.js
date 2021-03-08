@@ -9,7 +9,7 @@ const sessionMiddleware = require('./middlewares/sessionMiddleware');
 const http = require('http');
 const socketIO = require('socket.io');
 const { User, Chat } = require('./models');
-const { ChatModule } = require('./modules')
+const { ChatModule, UserModule } = require('./modules')
 
 const advertisementsApiRouter = require('./routes/api/advertisements');
 const usersApiRouter = require('./routes/api/users');
@@ -40,7 +40,7 @@ function verify(email, passwordHash, done) {
                 return done(null, user);
             }
         }
-        return done(null, false);
+        return done(null, false, 'lol');
     });
 }
 
@@ -52,10 +52,8 @@ passport.serializeUser(function(user, done) {
 
 passport.deserializeUser(function(id, done) {
     User.findById(id, function(err,user){
-        err 
-            ? done(err)
-            : done(null, user);
-        });
+        done(null, user);
+    });
 });
 
 app.use(bodyParser.json());
@@ -84,15 +82,23 @@ async function start() {
     }
 }
 
+const wrapIo = middleware => (socket, next) => middleware(socket.request, {}, next);
 io
-    .use(function(socket, next) {
-        sessionMiddleware(socket.request, {}, next);
+    .use(wrapIo(sessionMiddleware))
+    .use(wrapIo(passport.initialize()))
+    .use(wrapIo(passport.session()))
+    .use((socket, next) => {
+        if (socket.request.user) {
+            next();
+        } else {
+            next(new Error('Unauthorized'));
+        }
     })
     .on('connection', socket => {
         const { id } = socket;
         console.log(`Socket connected: ${id}`);
 
-        const userId = socket.handshake.query.userId;
+        const userId = socket.request.user.id;
         if (userId) {
 
             ChatModule.subscribe(async (chatId, message) => {
@@ -104,22 +110,30 @@ io
                 }
             });
 
-            socket.on('getHistory', async (revieverId) => {
-                const chat = await ChatModule.find({ users: [userId, recieverId] });
-                let messages = [];
-                if (chat) {
-                    const { id } = chat;
-                    messages = await ChatModule.getHistory(id);
+            socket.on('getHistory', async (recieverEmail) => {
+                const reciever = await UserModule.findByEmail(recieverEmail);
+                if (reciever) {
+                    const recieverId = reciever._id;
+                    const chat = await ChatModule.find({ users: [userId, recieverId] });
+                    let messages = [];
+                    if (chat) {
+                        const { id } = chat;
+                        messages = await ChatModule.getHistory(id);
+                    }
+                    console.log(messages);
+                    socket.emit('chatHistory', messages);
                 }
-                socket.emit('chatHistory', messages);
             });
 
-            socket.on('sendMessage', async (reciever, text) => {
-                await ChatModule.sendMessage({
-                    author: userId,
-                    reciever,
-                    text,
-                });
+            socket.on('sendMessage', async (recieverEmail, text) => {
+                const reciever = await UserModule.findByEmail(recieverEmail);
+                if (reciever) { 
+                    await ChatModule.sendMessage({
+                        author: userId,
+                        reciever: reciever._id,
+                        text,
+                    });
+                }
             });
         }
 

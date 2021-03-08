@@ -26,8 +26,9 @@ class ChatModule {
             author,
             text,
         });
+        await message.save();
         chat.messages.push(message);
-        chat.save();
+        await chat.save();
         this.emitter.emit('newMessage', chat._id, message);
     }
 
@@ -36,7 +37,7 @@ class ChatModule {
     }
 
     async getHistory(id) {
-        const chat = await Chat.findById(id);
+        const chat = await Chat.findById(id).populate('messages');
         return chat.messages;
     }
 }

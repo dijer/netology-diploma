@@ -31,36 +31,33 @@ router.post('/signup', passwordHashMiddleware(), async (req, res) => {
     }
 });
 
-router.post('/signin', passwordHashMiddleware(), passport.authenticate('local'), async (req, res, next) => {
-    const { email, passwordHash } = req.body;
-    let isError = false;
-    try {
-        const user = await UserModule.findByEmail(email);
-        if (user && user.passwordHash === passwordHash) {
-            const { name, contactPhone } = user;
-            res.json({
-                data: {
-                    id: user._id,
-                    email,
-                    name,
-                    contactPhone,
-                },
-                status: 'ok',
-            });
-        } else {
-            isError = true;
-        }
-    } catch (e) {
-        isError = true;
-    } finally {
-        if (isError) {
-            res.status(401);
-            res.json({
-                error: "Неверный логин или пароль",
-                status: "error",
-            });
-        }
+router.post('/signin', passwordHashMiddleware(), function(req, res, next) {
+    passport.authenticate('local', function(err, user, info) {
+    if (err) {
+        return next(err); // will generate a 500 error
     }
+    if (!user) {
+        return res.json({
+            error: "Неверный логин или пароль",
+            status: "error",
+        });
+    }
+    req.login(user, function(err){
+        if(err){
+            return next(err);
+        }
+        const { _id: id, email, name, contactPhone } = user;
+        return res.json({
+            data: {
+                id,
+                email,
+                name,
+                contactPhone,
+            },
+            status: 'ok',
+        });
+    });
+    })(req, res, next);
 });
 
 module.exports = router;
