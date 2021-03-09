@@ -112,7 +112,7 @@ router.delete('/:id', authenticationMiddleware(), async (req, res, error) => {
         const { _id: currentUserId, name } = req.user;
         const advertisement = await AdvertisementModule.findById(id);
         const { userId } = advertisement;
-        if (`${currentUserId}` !== `${userId}`) {
+        if (String(currentUserId) !== String(userId)) {
             return res.status(403).json({
                 error: 'Вы не являетесь создателем объявления!',
                 status: 'error',

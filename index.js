@@ -101,11 +101,12 @@ io
         const userId = socket.request.user.id;
         if (userId) {
 
+            let recieverId = null;
+
+
             ChatModule.subscribe(async (chatId, message) => {
-                const userChatId = await ChatModule.find({
-                    users: [userId, message.author]
-                })
-                if (userChatId && chatId === userChatId) {
+                const chat = await ChatModule.find([userId, recieverId]);
+                if (chat && String(chatId) === String(chat._id)) {
                     socket.emit('newMessage', message);
                 }
             });
@@ -113,20 +114,19 @@ io
             socket.on('getHistory', async (recieverEmail) => {
                 const reciever = await UserModule.findByEmail(recieverEmail);
                 if (reciever) {
-                    const recieverId = reciever._id;
-                    const chat = await ChatModule.find({ users: [userId, recieverId] });
+                    const chat = await ChatModule.find([userId, reciever._id]);
                     let messages = [];
                     if (chat) {
                         const { id } = chat;
                         messages = await ChatModule.getHistory(id);
                     }
-                    console.log(messages);
                     socket.emit('chatHistory', messages);
                 }
             });
 
             socket.on('sendMessage', async (recieverEmail, text) => {
                 const reciever = await UserModule.findByEmail(recieverEmail);
+                recieverId = reciever._id;
                 if (reciever) { 
                     await ChatModule.sendMessage({
                         author: userId,
