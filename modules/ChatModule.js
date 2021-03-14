@@ -9,7 +9,7 @@ class ChatModule {
     async find(users) {
         const chat = await Chat.findOne({
             users: {
-                $in: users,
+                $all: users,
             },
         });
         return chat;
@@ -17,11 +17,7 @@ class ChatModule {
 
     async sendMessage(data) {
         const { author, reciever, text } = data;
-        let chat = await Chat.findOne({
-            users: {
-                $in: [author, reciever],
-            },
-        });
+        let chat = await this.find([author, reciever]);
         if (!chat) {
             chat = new Chat({
                 users: [author, reciever],
